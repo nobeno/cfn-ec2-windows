@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'This CloudFormation template to create EC2 instances.'
+
+Parameters:
+  AmiId:
+    Type: String
+    Default: ami-0f1d9d91c16265769
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  TagName:
+    Type: String
+    Default: CloudFormation-EC2
+
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: vpc-for-ec2-Windows
+
+  # Subnet
+  publicSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1a
+      VpcId:
+        Ref: VPC 
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: public-subnet-1a
+
+  publicSubnet1d:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: ap-northeast-1d
+      VpcId:
+        Ref: VPC
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: public-subnet-1d
+
+  # EC2
+  myEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName:
+        Ref: KeyName
+      InstanceInitiatedShutdownBehavior: stop
+      ImageId:
+        Ref: AmiId
+      InstanceType: t2.micro
+      Monitoring: false
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: 
+            Ref: publicSubnet1a
+          GroupSet:
+            - Ref:  securityGroupPublic1a
+      Tags:
+        - Key: Name
+          Value: ec2-for-windows
+  
+  # インターネットゲートウェイ
+  igwName:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: igw-1
+
+  # VPCGatewayAttachment
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId: 
+        Ref: igwName
+
+  # ルートテーブル
+  routeTableName:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC
+      Tags:
+        - Key: Name
+          Value: rutetable-1
+
+  # サブネットとルートテーブルの関連付け
+  routeTableAssocName:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: 
+        Ref: publicSubnet1a
+      RouteTableId: 
+        Ref: routeTableName
+
+  routeTableAssocName2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: 
+        Ref: publicSubnet1d
+      RouteTableId:
+        Ref: routeTableName
+
+  # インターネットゲートウェイとルートテーブルの関連付け
+  routeName:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: 
+        Ref: routeTableName
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: 
+        Ref: igwName
+
+  # セキュリティグループの定義
+  securityGroupPublic1a:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: public-sg-1a 
+      VpcId:
+        Ref: VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: # IP adress
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: public-sg-1a
